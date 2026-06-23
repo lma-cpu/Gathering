@@ -10,6 +10,7 @@ export function AuthButton({ email }: { email: string | null }) {
 
   async function signOut() {
     await supabase.auth.signOut();
+    await fetch("/api/auth/signout", { method: "POST" });
     router.refresh();
   }
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthButton } from "@/components/auth-button";
-import { createSupabaseServerClient } from "@/lib/supabase/server-client";
+import { getServerUser } from "@/lib/supabase/server-client";
 
 export const metadata: Metadata = {
   title: "GatherMin",
@@ -9,10 +9,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getServerUser();
 
   return (
     <html lang="en">

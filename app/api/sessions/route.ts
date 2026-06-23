@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createSupabaseServerClient } from "@/lib/supabase/server-client";
+import { getServerUser } from "@/lib/supabase/server-client";
 import { createSupabaseAdmin } from "@/lib/supabase/server";
 
 const createSessionSchema = z.object({
@@ -18,12 +18,7 @@ export async function POST(request: Request) {
   }
 
   const { creatorName, city, title, dateRange } = parsed.data;
-
-  const supabaseAuth = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabaseAuth.auth.getUser();
-
+  const user = await getServerUser();
   const supabase = createSupabaseAdmin();
 
   const { data, error } = await supabase
