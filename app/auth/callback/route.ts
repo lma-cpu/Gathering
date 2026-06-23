@@ -1,6 +1,22 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+const TIMEOUT = 30000;
+
+async function fetchWithTimeout(
+  url: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -9,56 +25,45 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     try {
-      const tokenRes = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/token?grant_type=authorization_code`,
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          cookies: {
+            getAll() {
+              return request.cookies.getAll();
+            },
+            setAll(
+              cookiesToSet: { name: string; value: string; options: Record<string, unknown> }[],
+              headers: Record<string, string>,
+            ) {
+              cookiesToSet.forEach(({ name, value }) => {
+                request.cookies.set(name, value);
+              });
+              Object.entries(headers).forEach(([key, value]) => {
+                request.headers.set(key, value);
+              });
+            },
           },
-          body: JSON.stringify({
-            code,
-            redirect_uri: `${origin}/auth/callback`,
-          }),
-          signal: AbortSignal.timeout(30000),
-        },
+          fetch: fetchWithTimeout,
+        } as any,
       );
 
-      if (tokenRes.ok) {
-        const data = await tokenRes.json();
-        const expiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
 
-        const session = {
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-          expires_in: data.expires_in,
-          expires_at: expiresAt,
-          token_type: data.token_type,
-          user: data.user,
-        };
-
-        const cookieValue = Buffer.from(JSON.stringify(session)).toString("base64url");
-
-        const redirect = NextResponse.redirect(`${origin}${next}`);
-        redirect.cookies.set("sb-" + extractProjectRef() + "-auth-token", cookieValue, {
-          path: "/",
-          maxAge: 60 * 60 * 24 * 365,
-          httpOnly: true,
-          sameSite: "lax",
-          secure: process.env.NODE_ENV === "production",
+      if (!error) {
+        const response = NextResponse.redirect(`${origin}${next}`);
+        request.cookies.getAll().forEach(({ name, value }) => {
+          response.cookies.set(name, value, { path: "/" });
         });
-        return redirect;
+        return response;
       }
+
+      return NextResponse.redirect(`${origin}/auth?error=auth_failed`);
     } catch {
       return NextResponse.redirect(`${origin}/auth?error=network_error`);
     }
   }
 
-  return NextResponse.redirect(`${origin}/auth?error=auth_failed`);
-}
-
-function extractProjectRef() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  return url.replace("https://", "").split(".")[0];
+  return NextResponse.redirect(`${origin}/auth?error=invalid_request`);
 }
