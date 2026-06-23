@@ -1,0 +1,6 @@
+{
+  "name": "GatherMin",
+  "description": "A minimalist, commercial-ready web app for coordinating group hangouts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
