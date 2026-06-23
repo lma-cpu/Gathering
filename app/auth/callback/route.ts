@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     try {
+      const authCookies: { name: string; value: string }[] = [];
+
       const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -34,14 +36,11 @@ export async function GET(request: NextRequest) {
               return request.cookies.getAll();
             },
             setAll(
-              cookiesToSet: { name: string; value: string; options: Record<string, unknown> }[],
-              headers: Record<string, string>,
+              cookiesToSet: { name: string; value: string }[],
             ) {
               cookiesToSet.forEach(({ name, value }) => {
+                authCookies.push({ name, value });
                 request.cookies.set(name, value);
-              });
-              Object.entries(headers).forEach(([key, value]) => {
-                request.headers.set(key, value);
               });
             },
           },
@@ -53,8 +52,13 @@ export async function GET(request: NextRequest) {
 
       if (!error) {
         const response = NextResponse.redirect(`${origin}${next}`);
-        request.cookies.getAll().forEach(({ name, value }) => {
-          response.cookies.set(name, value, { path: "/" });
+        authCookies.forEach(({ name, value }) => {
+          response.cookies.set(name, value, {
+            path: "/",
+            httpOnly: true,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+          });
         });
         return response;
       }

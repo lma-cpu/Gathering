@@ -7,9 +7,12 @@ create table if not exists public.hangout_sessions (
   title text,
   date_range text,
   status text not null default 'collecting' check (status in ('collecting', 'finalized')),
-  creator_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+-- Add creator_id column (safe to run even if column already exists)
+alter table public.hangout_sessions add column if not exists creator_id uuid references auth.users(id) on delete set null;
+create index if not exists hangout_sessions_creator_id_idx on public.hangout_sessions(creator_id);
 
 create table if not exists public.friend_responses (
   id uuid primary key default gen_random_uuid(),
